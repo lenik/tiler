@@ -13,7 +13,7 @@ override_dh_auto_install:
 
 override_dh_auto_test:
 	# Run syntax check
-	python3 -m py_compile tiler.py
+	python3 -m py_compile tiler
 
 override_dh_auto_clean:
 	dh_auto_clean

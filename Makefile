@@ -12,7 +12,7 @@ APPDATADIR = $(SHAREDIR)/metainfo
 DOCDIR = $(SHAREDIR)/doc/tiler
 
 # Source files
-SCRIPT = tiler.py
+SCRIPT = tiler
 DESKTOP = tiler.desktop
 APPDATA = io.github.tiler.metainfo.xml
 DOCS = README.md spec.md

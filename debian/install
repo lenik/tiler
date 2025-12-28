@@ -1,4 +1,4 @@
-tiler.py usr/bin/tiler
+tiler usr/bin/tiler
 tiler.desktop usr/share/applications/
 io.github.tiler.metainfo.xml usr/share/metainfo/
 README.md usr/share/doc/tiler/

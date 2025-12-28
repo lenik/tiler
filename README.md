@@ -22,7 +22,7 @@
 
 2. **Make the script executable**:
    ```bash
-   chmod +x tiler.py
+   chmod +x tiler
    ```
 
 3. **Optional: Add to PATH**:
@@ -31,7 +31,7 @@
    export PATH="$PATH:/path/to/tiler"
    
    # Or create a symlink
-   sudo ln -s /path/to/tiler/tiler.py /usr/local/bin/tiler
+   sudo ln -s /path/to/tiler/tiler /usr/local/bin/tiler
    ```
 
 ## Usage
@@ -40,46 +40,46 @@
 
 ```bash
 # Tile all windows in a grid (default behavior)
-./tiler.py
+./tiler
 
 # Tile all windows horizontally
-./tiler.py -H
+./tiler -H
 
 # Tile all windows vertically
-./tiler.py -V
+./tiler -V
 ```
 
 ### Application-Specific Tiling
 
 ```bash
 # Tile only specific applications
-./tiler.py -a "Firefox" -a "Terminal"
+./tiler -a "Firefox" -a "Terminal"
 
 # Tile Chrome windows horizontally
-./tiler.py -a "Chrome" -H
+./tiler -a "Chrome" -H
 ```
 
 ### Aspect Ratio Control
 
 ```bash
 # Set 16:9 aspect ratio for all windows
-./tiler.py -r 16:9
+./tiler -r 16:9
 
 # Combine with other options
-./tiler.py -a "Firefox" -r 4:3 -V
+./tiler -a "Firefox" -r 4:3 -V
 ```
 
 ### Margin Settings
 
 ```bash
 # Apply 10px margin on all sides
-./tiler.py -m 10
+./tiler -m 10
 
 # Different margins: top=10, right=20, bottom=15, left=5
-./tiler.py -m 10 20 15 5
+./tiler -m 10 20 15 5
 
 # Combine with tiling modes
-./tiler.py -a "Chrome" -a "Vim" -H -m 5
+./tiler -a "Chrome" -a "Vim" -H -m 5
 ```
 
 ## Command-Line Options
@@ -96,22 +96,22 @@
 
 1. **Basic grid tiling**:
    ```bash
-   ./tiler.py
+   ./tiler
    ```
 
 2. **Horizontal layout with margins**:
    ```bash
-   ./tiler.py -H -m 10
+   ./tiler -H -m 10
    ```
 
 3. **Specific apps with aspect ratio**:
    ```bash
-   ./tiler.py -a "Firefox" -a "Terminal" -r 16:9
+   ./tiler -a "Firefox" -a "Terminal" -r 16:9
    ```
 
 4. **Vertical layout with custom margins**:
    ```bash
-   ./tiler.py -V -m 5 10 5 10
+   ./tiler -V -m 5 10 5 10
    ```
 
 ## Requirements

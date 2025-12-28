@@ -25,6 +25,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import argparse
 import sys
 import math
+import os
+import psutil
 from typing import List, Tuple, Optional, Dict, Any
 from Xlib import display, X, Xutil
 from Xlib.error import BadWindow
@@ -33,13 +35,14 @@ from Xlib.error import BadWindow
 class Window:
     """Represents a window with its properties and geometry."""
     
-    def __init__(self, window_id, name: str, x: int, y: int, width: int, height: int):
+    def __init__(self, window_id, name: str, x: int, y: int, width: int, height: int, exe_basename: str = ""):
         self.window_id = window_id
         self.name = name
         self.x = x
         self.y = y
         self.width = width
         self.height = height
+        self.exe_basename = exe_basename
     
     def __repr__(self):
         return f"Window(name='{self.name}', geometry={self.x}x{self.y}+{self.width}+{self.height})"
@@ -174,6 +177,31 @@ class Tiler:
             except:
                 return "Unknown"
         
+        def get_window_exe_basename(window):
+            """Get the executable basename for a window."""
+            try:
+                # Try to get PID from _NET_WM_PID property
+                pid_prop = window.get_full_property(
+                    self.display.intern_atom('_NET_WM_PID'), X.AnyPropertyType
+                )
+                if pid_prop and pid_prop.value:
+                    pid = pid_prop.value[0]
+                    try:
+                        process = psutil.Process(pid)
+                        exe_path = process.exe()
+                        return os.path.basename(exe_path)
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                        pass
+                
+                # Fallback to WM_CLASS if PID method fails
+                wm_class = window.get_wm_class()
+                if wm_class:
+                    return wm_class[0].lower()  # Use instance name (first element)
+                
+                return "unknown"
+            except:
+                return "unknown"
+        
         def is_window_visible(window):
             """Check if window is visible and not minimized."""
             try:
@@ -200,10 +228,27 @@ class Tiler:
                 
                 geom = window.get_geometry()
                 name = get_window_name(window)
+                exe_basename = get_window_exe_basename(window)
                 
                 # Skip windows that are too small or have no name
                 if geom.width < 50 or geom.height < 50 or not name or name == "Unknown":
                     return
+                
+                # Skip tiler process itself
+                if exe_basename == "tiler" or exe_basename == "python3":
+                    # Additional check for python processes running tiler
+                    try:
+                        pid_prop = window.get_full_property(
+                            self.display.intern_atom('_NET_WM_PID'), X.AnyPropertyType
+                        )
+                        if pid_prop and pid_prop.value:
+                            pid = pid_prop.value[0]
+                            process = psutil.Process(pid)
+                            cmdline = ' '.join(process.cmdline())
+                            if 'tiler' in cmdline:
+                                return
+                    except:
+                        pass
                 
                 # Get absolute coordinates by walking up the window tree
                 abs_x, abs_y = geom.x, geom.y
@@ -227,7 +272,8 @@ class Tiler:
                     x=abs_x,
                     y=abs_y,
                     width=geom.width,
-                    height=geom.height
+                    height=geom.height,
+                    exe_basename=exe_basename
                 )
                 
                 # Only include windows that are on the current display
@@ -249,14 +295,15 @@ class Tiler:
         return windows
     
     def filter_windows_by_app(self, windows: List[Window], app_names: List[str]) -> List[Window]:
-        """Filter windows by application names."""
+        """Filter windows by executable basename."""
         if not app_names:
             return windows
         
         filtered = []
         for window in windows:
             for app_name in app_names:
-                if app_name.lower() in window.name.lower():
+                # Match against executable basename
+                if app_name.lower() == window.exe_basename.lower():
                     filtered.append(window)
                     break
         
@@ -400,6 +447,75 @@ class Tiler:
             
             self.move_and_resize_window(window.window_id, x, y, width, height)
     
+    def tile_windows_circular(self, windows: List[Window], aspect_ratio: Optional[Tuple[int, int]], 
+                             margins: List[int], circular_radius: Optional[Tuple[int, bool]] = None,
+                             circular_margin: int = 0, circular_width: Optional[Tuple[int, bool]] = None):
+        """Tile windows in a circular pattern."""
+        if not windows:
+            return
+        
+        display = self.current_display
+        center_x = display.x + display.width // 2
+        center_y = display.y + display.height // 2
+        
+        # Calculate radius
+        if circular_radius:
+            radius_value, is_percent = circular_radius
+            if is_percent:
+                # Use percentage of smaller display dimension
+                min_dimension = min(display.width, display.height)
+                radius = int(min_dimension * radius_value / 100 / 2)
+            else:
+                radius = radius_value
+        else:
+            # Default radius: 30% of smaller display dimension
+            min_dimension = min(display.width, display.height)
+            radius = int(min_dimension * 0.3)
+        
+        # Apply circular margin
+        radius = max(50, radius - circular_margin)
+        
+        # Calculate window dimensions
+        if circular_width:
+            width_value, is_percent = circular_width
+            if is_percent:
+                window_width = int(display.width * width_value / 100)
+            else:
+                window_width = width_value
+        else:
+            # Default width based on number of windows and circle circumference
+            circumference = 2 * math.pi * radius
+            window_width = max(100, int(circumference / len(windows) * 0.8))
+        
+        # Calculate window height (maintain aspect ratio or use default)
+        if aspect_ratio:
+            window_height = int(window_width * aspect_ratio[1] / aspect_ratio[0])
+        else:
+            window_height = int(window_width * 0.75)  # Default 4:3 aspect ratio
+        
+        # Position windows around the circle
+        angle_step = 2 * math.pi / len(windows)
+        
+        for i, window in enumerate(windows):
+            angle = i * angle_step
+            
+            # Calculate position on circle
+            x = center_x + int(radius * math.cos(angle)) - window_width // 2
+            y = center_y + int(radius * math.sin(angle)) - window_height // 2
+            
+            # Ensure windows stay within display bounds
+            x = max(display.x, min(x, display.x + display.width - window_width))
+            y = max(display.y, min(y, display.y + display.height - window_height))
+            
+            width = window_width
+            height = window_height
+            
+            # Apply regular margins if specified
+            if margins:
+                x, y, width, height = self.apply_margins(x, y, width, height, margins)
+            
+            self.move_and_resize_window(window.window_id, x, y, width, height)
+    
     def move_and_resize_window(self, window_id, x: int, y: int, width: int, height: int):
         """Move and resize a window."""
         try:
@@ -456,21 +572,55 @@ def parse_margins(margin_str: str) -> List[int]:
         raise argparse.ArgumentTypeError(f"Invalid margins '{margin_str}': {e}")
 
 
+def parse_size_or_percent(size_str: str) -> Tuple[int, bool]:
+    """Parse size string that can be pixels or percentage.
+    Returns (value, is_percentage) tuple.
+    """
+    try:
+        if size_str.endswith('%'):
+            percent = float(size_str[:-1])
+            if percent < 0 or percent > 100:
+                raise ValueError("Percentage must be between 0 and 100")
+            return (int(percent), True)
+        else:
+            pixels = int(size_str)
+            if pixels < 0:
+                raise ValueError("Pixel value must be non-negative")
+            return (pixels, False)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"Invalid size '{size_str}': {e}")
+
+
+def parse_circular_margin(margin_str: str) -> int:
+    """Parse circular margin as integer pixels."""
+    try:
+        margin = int(margin_str)
+        if margin < 0:
+            raise ValueError("Margin must be non-negative")
+        return margin
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"Invalid circular margin '{margin_str}': {e}")
+
+
 def main():
     """Main entry point for the tiler application."""
     parser = argparse.ArgumentParser(
         description="Tiler: Command-Line Tool for Window Tiling on X11",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog="""\
 Examples:
   tiler                           # Tile all windows in grid layout
   tiler -H                        # Tile all windows horizontally
   tiler -V                        # Tile all windows vertically
+  tiler --circular                # Tile windows in circular pattern
   tiler -a Firefox -a Terminal    # Tile only Firefox and Terminal windows
   tiler -r 16:9                   # Tile with 16:9 aspect ratio
   tiler -m 10 20 15 5            # Tile with custom margins
   tiler -a Chrome -H -m 5        # Tile Chrome windows horizontally with 5px margin
-        """
+  tiler --circular --circular-radius 300    # Circular tiling with 300px radius
+  tiler --circular --circular-radius 40%    # Circular tiling with 40% screen radius
+  tiler --circular --circular-width 200 --circular-margin 20  # Custom circular layout
+"""
     )
     
     parser.add_argument(
@@ -507,11 +657,47 @@ Examples:
         help='Set margins for windows in pixels'
     )
     
+    parser.add_argument(
+        '--circular',
+        action='store_true',
+        help='Tile windows in circular shape'
+    )
+    
+    parser.add_argument(
+        '--circular-radius',
+        type=parse_size_or_percent,
+        metavar='RADIUS',
+        help='Circular radius in pixels or percentage (e.g., 200 or 30%%)'
+    )
+    
+    parser.add_argument(
+        '--circular-margin',
+        type=parse_circular_margin,
+        metavar='SIZE',
+        help='Circular margin in pixels'
+    )
+    
+    parser.add_argument(
+        '--circular-width',
+        type=parse_size_or_percent,
+        metavar='WIDTH',
+        help='Window width in pixels or percentage (e.g., 150 or 20%%)'
+    )
+    
     args = parser.parse_args()
     
     # Validate mutually exclusive options
-    if args.horizontal and args.vertical:
-        parser.error("Cannot specify both --horizontal and --vertical")
+    tiling_modes = [args.horizontal, args.vertical, args.circular]
+    if sum(tiling_modes) > 1:
+        parser.error("Cannot specify multiple tiling modes (--horizontal, --vertical, --circular)")
+    
+    # Validate circular options
+    if args.circular_radius and not args.circular:
+        parser.error("--circular-radius requires --circular")
+    if args.circular_margin and not args.circular:
+        parser.error("--circular-margin requires --circular")
+    if args.circular_width and not args.circular:
+        parser.error("--circular-width requires --circular")
     
     # Initialize tiler
     tiler = Tiler()
@@ -542,13 +728,22 @@ Examples:
         
         # Debug: Show which windows are being tiled
         for i, window in enumerate(windows_to_tile, 1):
-            print(f"  {i}. {window.name} ({window.width}x{window.height} at {window.x},{window.y})")
+            print(f"  {i}. {window.name} [{window.exe_basename}] ({window.width}x{window.height} at {window.x},{window.y})")
         
         # Apply tiling based on mode
         if args.horizontal:
             tiler.tile_windows_horizontal(windows_to_tile, args.aspect_ratio, args.margin or [])
         elif args.vertical:
             tiler.tile_windows_vertical(windows_to_tile, args.aspect_ratio, args.margin or [])
+        elif args.circular:
+            tiler.tile_windows_circular(
+                windows_to_tile, 
+                args.aspect_ratio, 
+                args.margin or [],
+                args.circular_radius,
+                args.circular_margin or 0,
+                args.circular_width
+            )
         else:
             # Default grid layout
             tiler.tile_windows_grid(windows_to_tile, args.aspect_ratio, args.margin or [])
