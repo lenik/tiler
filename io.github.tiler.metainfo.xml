@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="console-application">
+  <id>io.github.tiler</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0+</project_license>
+  <name>Tiler</name>
+  <summary>Command-line tool for window tiling on X11</summary>
+  <description>
+    <p>
+      Tiler is a powerful command-line tool designed to automatically arrange and resize windows
+      on X11 desktop environments. It provides flexible window tiling capabilities with support
+      for various layout modes, aspect ratio control, and customizable margins.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Automatic window arrangement and resizing</li>
+      <li>Application-specific window selection</li>
+      <li>Multiple tiling modes: horizontal, vertical, and grid layouts</li>
+      <li>Aspect ratio control for consistent window proportions</li>
+      <li>Configurable margins and spacing</li>
+      <li>Simple command-line interface</li>
+    </ul>
+    <p>
+      Perfect for users who want to organize their workspace efficiently, whether working
+      with a few applications or managing dozens of windows simultaneously.
+    </p>
+  </description>
+  <launchable type="desktop-id">tiler.desktop</launchable>
+  <provides>
+    <binary>tiler</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>window</keyword>
+    <keyword>tile</keyword>
+    <keyword>tiling</keyword>
+    <keyword>x11</keyword>
+    <keyword>desktop</keyword>
+    <keyword>layout</keyword>
+    <keyword>workspace</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/lenik/tiler</url>
+  <url type="bugtracker">https://github.com/lenik/tiler/issues</url>
+  <developer_name>Lenik</developer_name>
+  <update_contact>tiler@bodz.net</update_contact>
+  <releases>
+    <release version="1.0.0" date="2025-12-28">
+      <description>
+        <p>Initial release of Tiler with full X11 window tiling functionality.</p>
+        <ul>
+          <li>Complete CLI interface with argparse</li>
+          <li>Support for horizontal, vertical, and grid tiling modes</li>
+          <li>Application-specific window filtering</li>
+          <li>Aspect ratio control and margin configuration</li>
+          <li>Robust X11 integration using python-xlib</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1" />
+</component>

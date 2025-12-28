@@ -1,0 +1,13 @@
+tiler (1.0.0-1) unstable; urgency=medium
+
+  * Initial release of Tiler
+  * Complete X11 window tiling functionality
+  * Support for horizontal, vertical, and grid tiling modes
+  * Application-specific window filtering with -a/--for-app
+  * Aspect ratio control with -r/--aspect-ratio
+  * Configurable margins with -m/--margin
+  * Robust X11 integration using python-xlib
+  * Command-line interface with comprehensive help
+  * Desktop integration with .desktop file and AppData
+
+ -- Lenik <tiler@bodz.net>  Sat, 28 Dec 2025 23:30:00 +0800

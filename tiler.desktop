@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Tiler
+GenericName=Window Tiler
+Comment=Command-line tool for window tiling on X11
+Exec=tiler
+Icon=applications-utilities
+Terminal=true
+Categories=Utility;System;
+Keywords=window;tile;tiling;x11;desktop;layout;
+StartupNotify=false

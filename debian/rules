@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_build:
+	# No build step needed for Python script
+
+override_dh_auto_install:
+	dh_auto_install
+	# Install using our Makefile
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tiler PREFIX=/usr
+
+override_dh_auto_test:
+	# Run syntax check
+	python3 -m py_compile tiler.py
+
+override_dh_auto_clean:
+	dh_auto_clean
+	$(MAKE) clean

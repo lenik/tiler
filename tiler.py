@@ -1,0 +1,568 @@
+#!/usr/bin/env python3
+"""
+Tiler: Command-Line Tool for Window Tiling on X11
+
+A Python-based tool for automatically arranging and resizing windows
+on X11 desktop environments with support for various tiling modes,
+aspect ratios, and margins.
+
+Copyright (C) 2025 Lenik <tiler@bodz.net>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+import argparse
+import sys
+import math
+from typing import List, Tuple, Optional, Dict, Any
+from Xlib import display, X, Xutil
+from Xlib.error import BadWindow
+
+
+class Window:
+    """Represents a window with its properties and geometry."""
+    
+    def __init__(self, window_id, name: str, x: int, y: int, width: int, height: int):
+        self.window_id = window_id
+        self.name = name
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    
+    def __repr__(self):
+        return f"Window(name='{self.name}', geometry={self.x}x{self.y}+{self.width}+{self.height})"
+
+
+class DisplayInfo:
+    """Information about a display/monitor."""
+    
+    def __init__(self, x: int, y: int, width: int, height: int):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    
+    def contains_point(self, x: int, y: int) -> bool:
+        """Check if a point is within this display."""
+        return (self.x <= x < self.x + self.width and 
+                self.y <= y < self.y + self.height)
+    
+    def contains_window(self, window: Window) -> bool:
+        """Check if a window is primarily on this display."""
+        # Consider window to be on this display if its center is within the display
+        center_x = window.x + window.width // 2
+        center_y = window.y + window.height // 2
+        return self.contains_point(center_x, center_y)
+    
+    def __repr__(self):
+        return f"DisplayInfo({self.x}, {self.y}, {self.width}x{self.height})"
+
+
+class Tiler:
+    """Main tiler class for window management and tiling operations."""
+    
+    def __init__(self):
+        self.display = display.Display()
+        self.screen = self.display.screen()
+        self.root = self.screen.root
+        self.current_display = self.get_current_display()
+        
+    def get_current_display(self) -> DisplayInfo:
+        """Get information about the current active display."""
+        try:
+            # Try to get cursor position to determine active display
+            cursor_info = self.root.query_pointer()
+            cursor_x, cursor_y = cursor_info.root_x, cursor_info.root_y
+            
+            # Get all displays using Xinerama if available
+            displays = self.get_all_displays()
+            
+            # Find display containing cursor
+            for disp in displays:
+                if disp.contains_point(cursor_x, cursor_y):
+                    return disp
+            
+            # Fallback to first display if cursor not found
+            return displays[0] if displays else DisplayInfo(0, 0, self.screen.width_in_pixels, self.screen.height_in_pixels)
+            
+        except Exception:
+            # Fallback to full screen if detection fails
+            return DisplayInfo(0, 0, self.screen.width_in_pixels, self.screen.height_in_pixels)
+    
+    def get_all_displays(self) -> List[DisplayInfo]:
+        """Get information about all displays/monitors."""
+        displays = []
+        
+        try:
+            # Try to use Xinerama extension for multi-monitor support
+            if self.display.has_extension('XINERAMA'):
+                xinerama = self.display.xinerama_query_screens()
+                if xinerama and xinerama.screens:
+                    for screen in xinerama.screens:
+                        displays.append(DisplayInfo(
+                            x=screen.x_org,
+                            y=screen.y_org,
+                            width=screen.width,
+                            height=screen.height
+                        ))
+                    return displays
+        except Exception:
+            pass
+        
+        try:
+            # Try RandR extension as fallback
+            if self.display.has_extension('RANDR'):
+                from Xlib.ext import randr
+                r = randr.get_screen_resources(self.root)
+                if r and r.outputs:
+                    for output in r.outputs:
+                        try:
+                            output_info = randr.get_output_info(self.root, output, r.config_timestamp)
+                            if output_info.crtc:
+                                crtc_info = randr.get_crtc_info(self.root, output_info.crtc, r.config_timestamp)
+                                if crtc_info.width > 0 and crtc_info.height > 0:
+                                    displays.append(DisplayInfo(
+                                        x=crtc_info.x,
+                                        y=crtc_info.y,
+                                        width=crtc_info.width,
+                                        height=crtc_info.height
+                                    ))
+                        except Exception:
+                            continue
+                    if displays:
+                        return displays
+        except Exception:
+            pass
+        
+        # Fallback to single display (full screen)
+        displays.append(DisplayInfo(0, 0, self.screen.width_in_pixels, self.screen.height_in_pixels))
+        return displays
+        
+    def get_screen_dimensions(self) -> Tuple[int, int]:
+        """Get the current display width and height."""
+        return self.current_display.width, self.current_display.height
+    
+    def get_all_windows(self) -> List[Window]:
+        """Get all visible windows on the current display."""
+        windows = []
+        
+        def get_window_name(window):
+            """Get the window name/title."""
+            try:
+                window_name = window.get_wm_name()
+                if window_name:
+                    return window_name
+                
+                # Try WM_CLASS as fallback
+                wm_class = window.get_wm_class()
+                if wm_class:
+                    return wm_class[1] if len(wm_class) > 1 else wm_class[0]
+                
+                return "Unknown"
+            except:
+                return "Unknown"
+        
+        def is_window_visible(window):
+            """Check if window is visible and not minimized."""
+            try:
+                attrs = window.get_attributes()
+                if attrs.map_state != X.IsViewable:
+                    return False
+                
+                # Check if window is not minimized
+                wm_state = window.get_full_property(
+                    self.display.intern_atom('WM_STATE'), X.AnyPropertyType
+                )
+                if wm_state and wm_state.value[0] == Xutil.IconicState:
+                    return False
+                
+                return True
+            except:
+                return False
+        
+        def process_window(window):
+            """Process a single window and add to list if valid."""
+            try:
+                if not is_window_visible(window):
+                    return
+                
+                geom = window.get_geometry()
+                name = get_window_name(window)
+                
+                # Skip windows that are too small or have no name
+                if geom.width < 50 or geom.height < 50 or not name or name == "Unknown":
+                    return
+                
+                # Get absolute coordinates by walking up the window tree
+                abs_x, abs_y = geom.x, geom.y
+                parent = window
+                while True:
+                    try:
+                        tree = parent.query_tree()
+                        if tree.parent == self.root or tree.parent == 0:
+                            break
+                        parent_geom = tree.parent.get_geometry()
+                        abs_x += parent_geom.x
+                        abs_y += parent_geom.y
+                        parent = tree.parent
+                    except:
+                        break
+                
+                # Create window object
+                win = Window(
+                    window_id=window.id,
+                    name=name,
+                    x=abs_x,
+                    y=abs_y,
+                    width=geom.width,
+                    height=geom.height
+                )
+                
+                # Only include windows that are on the current display
+                if self.current_display.contains_window(win):
+                    windows.append(win)
+            except BadWindow:
+                pass
+            except Exception as e:
+                print(f"Error processing window: {e}", file=sys.stderr)
+        
+        # Get all child windows
+        try:
+            children = self.root.query_tree().children
+            for child in children:
+                process_window(child)
+        except Exception as e:
+            print(f"Error querying windows: {e}", file=sys.stderr)
+        
+        return windows
+    
+    def filter_windows_by_app(self, windows: List[Window], app_names: List[str]) -> List[Window]:
+        """Filter windows by application names."""
+        if not app_names:
+            return windows
+        
+        filtered = []
+        for window in windows:
+            for app_name in app_names:
+                if app_name.lower() in window.name.lower():
+                    filtered.append(window)
+                    break
+        
+        return filtered
+    
+    def calculate_aspect_ratio_dimensions(self, width: int, height: int, aspect_ratio: Tuple[int, int]) -> Tuple[int, int]:
+        """Calculate new dimensions maintaining the given aspect ratio."""
+        if not aspect_ratio:
+            return width, height
+        
+        target_ratio = aspect_ratio[0] / aspect_ratio[1]
+        current_ratio = width / height
+        
+        if current_ratio > target_ratio:
+            # Width is too large, adjust it
+            new_width = int(height * target_ratio)
+            return new_width, height
+        else:
+            # Height is too large, adjust it
+            new_height = int(width / target_ratio)
+            return width, new_height
+    
+    def apply_margins(self, x: int, y: int, width: int, height: int, margins: List[int]) -> Tuple[int, int, int, int]:
+        """Apply margins to window coordinates and dimensions."""
+        if not margins:
+            return x, y, width, height
+        
+        # Parse margins: [top, right, bottom, left]
+        if len(margins) == 1:
+            top = right = bottom = left = margins[0]
+        elif len(margins) == 2:
+            top = bottom = margins[0]
+            right = left = margins[1]
+        elif len(margins) == 3:
+            top, right, bottom = margins
+            left = right
+        else:
+            top, right, bottom, left = margins[:4]
+        
+        new_x = x + left
+        new_y = y + top
+        new_width = max(50, width - left - right)
+        new_height = max(50, height - top - bottom)
+        
+        return new_x, new_y, new_width, new_height
+    
+    def calculate_grid_layout(self, num_windows: int) -> Tuple[int, int]:
+        """Calculate optimal rows and columns for grid layout."""
+        if num_windows <= 0:
+            return 0, 0
+        
+        # Try to make it as square as possible
+        cols = math.ceil(math.sqrt(num_windows))
+        rows = math.ceil(num_windows / cols)
+        
+        return rows, cols
+    
+    def tile_windows_horizontal(self, windows: List[Window], aspect_ratio: Optional[Tuple[int, int]], margins: List[int]):
+        """Tile windows horizontally (one row, multiple columns)."""
+        if not windows:
+            return
+        
+        display = self.current_display
+        window_width = display.width // len(windows)
+        window_height = display.height
+        
+        for i, window in enumerate(windows):
+            x = display.x + i * window_width
+            y = display.y
+            width = window_width
+            height = window_height
+            
+            # Apply aspect ratio
+            if aspect_ratio:
+                width, height = self.calculate_aspect_ratio_dimensions(width, height, aspect_ratio)
+                # Center the window if it's smaller due to aspect ratio
+                x += (window_width - width) // 2
+                y += (display.height - height) // 2
+            
+            # Apply margins
+            x, y, width, height = self.apply_margins(x, y, width, height, margins)
+            
+            self.move_and_resize_window(window.window_id, x, y, width, height)
+    
+    def tile_windows_vertical(self, windows: List[Window], aspect_ratio: Optional[Tuple[int, int]], margins: List[int]):
+        """Tile windows vertically (one column, multiple rows)."""
+        if not windows:
+            return
+        
+        display = self.current_display
+        window_width = display.width
+        window_height = display.height // len(windows)
+        
+        for i, window in enumerate(windows):
+            x = display.x
+            y = display.y + i * window_height
+            width = window_width
+            height = window_height
+            
+            # Apply aspect ratio
+            if aspect_ratio:
+                width, height = self.calculate_aspect_ratio_dimensions(width, height, aspect_ratio)
+                # Center the window if it's smaller due to aspect ratio
+                x += (display.width - width) // 2
+                y += (window_height - height) // 2
+            
+            # Apply margins
+            x, y, width, height = self.apply_margins(x, y, width, height, margins)
+            
+            self.move_and_resize_window(window.window_id, x, y, width, height)
+    
+    def tile_windows_grid(self, windows: List[Window], aspect_ratio: Optional[Tuple[int, int]], margins: List[int]):
+        """Tile windows in a grid layout (default behavior)."""
+        if not windows:
+            return
+        
+        rows, cols = self.calculate_grid_layout(len(windows))
+        display = self.current_display
+        
+        window_width = display.width // cols
+        window_height = display.height // rows
+        
+        for i, window in enumerate(windows):
+            row = i // cols
+            col = i % cols
+            
+            x = display.x + col * window_width
+            y = display.y + row * window_height
+            width = window_width
+            height = window_height
+            
+            # Apply aspect ratio
+            if aspect_ratio:
+                width, height = self.calculate_aspect_ratio_dimensions(width, height, aspect_ratio)
+                # Center the window if it's smaller due to aspect ratio
+                x += (window_width - width) // 2
+                y += (window_height - height) // 2
+            
+            # Apply margins
+            x, y, width, height = self.apply_margins(x, y, width, height, margins)
+            
+            self.move_and_resize_window(window.window_id, x, y, width, height)
+    
+    def move_and_resize_window(self, window_id, x: int, y: int, width: int, height: int):
+        """Move and resize a window."""
+        try:
+            window = self.display.create_resource_object('window', window_id)
+            
+            # Configure the window
+            window.configure(
+                x=x,
+                y=y,
+                width=width,
+                height=height
+            )
+            
+            self.display.sync()
+        except Exception as e:
+            print(f"Error moving/resizing window {window_id}: {e}", file=sys.stderr)
+    
+    def close(self):
+        """Close the display connection."""
+        self.display.close()
+
+
+def parse_aspect_ratio(ratio_str: str) -> Tuple[int, int]:
+    """Parse aspect ratio string like '16:9' into tuple (16, 9)."""
+    try:
+        parts = ratio_str.split(':')
+        if len(parts) != 2:
+            raise ValueError("Aspect ratio must be in format W:H")
+        
+        width = int(parts[0])
+        height = int(parts[1])
+        
+        if width <= 0 or height <= 0:
+            raise ValueError("Aspect ratio values must be positive")
+        
+        return (width, height)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"Invalid aspect ratio '{ratio_str}': {e}")
+
+
+def parse_margins(margin_str: str) -> List[int]:
+    """Parse margin string into list of integers."""
+    try:
+        margins = [int(x) for x in margin_str.split()]
+        if len(margins) < 1 or len(margins) > 4:
+            raise ValueError("Margins must have 1-4 values")
+        
+        for margin in margins:
+            if margin < 0:
+                raise ValueError("Margin values must be non-negative")
+        
+        return margins
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"Invalid margins '{margin_str}': {e}")
+
+
+def main():
+    """Main entry point for the tiler application."""
+    parser = argparse.ArgumentParser(
+        description="Tiler: Command-Line Tool for Window Tiling on X11",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  tiler                           # Tile all windows in grid layout
+  tiler -H                        # Tile all windows horizontally
+  tiler -V                        # Tile all windows vertically
+  tiler -a Firefox -a Terminal    # Tile only Firefox and Terminal windows
+  tiler -r 16:9                   # Tile with 16:9 aspect ratio
+  tiler -m 10 20 15 5            # Tile with custom margins
+  tiler -a Chrome -H -m 5        # Tile Chrome windows horizontally with 5px margin
+        """
+    )
+    
+    parser.add_argument(
+        '-a', '--for-app',
+        action='append',
+        dest='app_names',
+        metavar='NAME',
+        help='Select windows by application name (can be repeated)'
+    )
+    
+    parser.add_argument(
+        '-r', '--aspect-ratio',
+        type=parse_aspect_ratio,
+        metavar='W:H',
+        help='Set aspect ratio for windows (e.g., 16:9)'
+    )
+    
+    parser.add_argument(
+        '-H', '--horizontal',
+        action='store_true',
+        help='Tile windows horizontally (one row)'
+    )
+    
+    parser.add_argument(
+        '-V', '--vertical',
+        action='store_true',
+        help='Tile windows vertically (one column)'
+    )
+    
+    parser.add_argument(
+        '-m', '--margin',
+        type=parse_margins,
+        metavar='TOP [RIGHT [BOTTOM [LEFT]]]',
+        help='Set margins for windows in pixels'
+    )
+    
+    args = parser.parse_args()
+    
+    # Validate mutually exclusive options
+    if args.horizontal and args.vertical:
+        parser.error("Cannot specify both --horizontal and --vertical")
+    
+    # Initialize tiler
+    tiler = Tiler()
+    
+    try:
+        # Show current display info
+        display = tiler.current_display
+        print(f"Using display: {display.width}x{display.height} at ({display.x},{display.y})")
+        
+        # Get all windows
+        all_windows = tiler.get_all_windows()
+        
+        if not all_windows:
+            print("No windows found to tile on current display", file=sys.stderr)
+            return 1
+        
+        # Filter windows by application names if specified
+        windows_to_tile = tiler.filter_windows_by_app(all_windows, args.app_names or [])
+        
+        if not windows_to_tile:
+            if args.app_names:
+                print(f"No windows found for applications: {', '.join(args.app_names)}", file=sys.stderr)
+            else:
+                print("No windows found to tile", file=sys.stderr)
+            return 1
+        
+        print(f"Tiling {len(windows_to_tile)} windows...")
+        
+        # Debug: Show which windows are being tiled
+        for i, window in enumerate(windows_to_tile, 1):
+            print(f"  {i}. {window.name} ({window.width}x{window.height} at {window.x},{window.y})")
+        
+        # Apply tiling based on mode
+        if args.horizontal:
+            tiler.tile_windows_horizontal(windows_to_tile, args.aspect_ratio, args.margin or [])
+        elif args.vertical:
+            tiler.tile_windows_vertical(windows_to_tile, args.aspect_ratio, args.margin or [])
+        else:
+            # Default grid layout
+            tiler.tile_windows_grid(windows_to_tile, args.aspect_ratio, args.margin or [])
+        
+        print("Tiling completed successfully")
+        return 0
+        
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    
+    finally:
+        tiler.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
