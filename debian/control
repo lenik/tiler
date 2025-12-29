@@ -12,7 +12,7 @@ Rules-Requires-Root: no
 Package: tiler
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends}, python3-xlib, python3-psutil
-Suggests: wmctrl, xprop
+Suggests: wmctrl, xprop, bash-completion
 Description: Command-line tool for window tiling on X11
  Tiler is a powerful command-line tool designed to automatically arrange
  and resize windows on X11 desktop environments. It provides flexible

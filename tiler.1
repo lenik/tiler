@@ -1,0 +1,218 @@
+.TH TILER 1 "December 2025" "tiler 1.0" "User Commands"
+.SH NAME
+tiler \- command-line tool for window tiling on X11
+.SH SYNOPSIS
+.B tiler
+[\fIOPTION\fR]...
+.SH DESCRIPTION
+.B tiler
+is a powerful command-line tool designed to automatically arrange and resize windows on X11 desktop environments. It provides flexible window tiling capabilities with support for various layout modes, aspect ratio control, and customizable margins.
+
+The tool can tile all visible windows or filter by specific applications. It supports horizontal, vertical, grid, and circular tiling layouts with intelligent multi-display detection.
+
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show help message and exit.
+
+.TP
+.BR \-a ", " \-\-for\-app " " \fINAME\fR
+Select windows by application executable name. This option can be repeated to specify multiple applications. The tool matches against the executable basename (e.g., 'firefox', 'kitty').
+
+.TP
+.BR \-r ", " \-\-aspect\-ratio " " \fIW:H\fR
+Set aspect ratio for windows (e.g., 16:9, 4:3). Windows will be resized to maintain the specified aspect ratio within their allocated space.
+
+.TP
+.BR \-H ", " \-\-horizontal
+Tile windows horizontally in a single row. All windows will have the same height and be arranged side by side.
+
+.TP
+.BR \-V ", " \-\-vertical
+Tile windows vertically in a single column. All windows will have the same width and be stacked vertically.
+
+.TP
+.BR \-m ", " \-\-margin " " \fITOP\fR " [" \fIRIGHT\fR " [" \fIBOTTOM\fR " [" \fILEFT\fR "]]]"
+Set margins for windows in pixels. Supports 1-4 values:
+.RS
+.IP \(bu 2
+1 value: applied to all sides
+.IP \(bu 2
+2 values: top/bottom, left/right
+.IP \(bu 2
+3 values: top, left/right, bottom
+.IP \(bu 2
+4 values: top, right, bottom, left
+.RE
+
+.TP
+.BR \-\-circular
+Tile windows in a circular pattern around the center of the display.
+
+.TP
+.BR \-\-circular\-radius " " \fIRADIUS\fR
+Set the radius for circular tiling. Can be specified in pixels (e.g., 200) or as a percentage of screen size (e.g., 30%). Default is 30% of the smaller display dimension.
+
+.TP
+.BR \-\-circular\-margin " " \fISIZE\fR
+Set margin between the circular layout and windows in pixels. This reduces the effective radius by the specified amount.
+
+.TP
+.BR \-\-circular\-width " " \fIWIDTH\fR
+Set window width for circular layout. Can be specified in pixels (e.g., 150) or as a percentage of screen width (e.g., 20%). Default is calculated based on circle circumference and number of windows.
+
+.SH EXAMPLES
+.TP
+.B tiler
+Tile all windows in grid layout (default behavior).
+
+.TP
+.B tiler \-H
+Tile all windows horizontally in a single row.
+
+.TP
+.B tiler \-V
+Tile all windows vertically in a single column.
+
+.TP
+.B tiler \-\-circular
+Tile windows in circular pattern with default settings.
+
+.TP
+.B tiler \-a firefox \-a kitty
+Tile only Firefox and Kitty windows.
+
+.TP
+.B tiler \-r 16:9
+Tile all windows with 16:9 aspect ratio.
+
+.TP
+.B tiler \-m 10 20 15 5
+Tile with custom margins: top=10px, right=20px, bottom=15px, left=5px.
+
+.TP
+.B tiler \-a chrome \-H \-m 5
+Tile Chrome windows horizontally with 5px margin on all sides.
+
+.TP
+.B tiler \-\-circular \-\-circular\-radius 300
+Circular tiling with 300px radius.
+
+.TP
+.B tiler \-\-circular \-\-circular\-radius 40%
+Circular tiling with radius of 40% of screen size.
+
+.TP
+.B tiler \-\-circular \-\-circular\-width 200 \-\-circular\-margin 20
+Custom circular layout with 200px window width and 20px margin.
+
+.SH FEATURES
+.TP
+.B Multi-display Support
+Automatically detects the current active display and tiles windows only within that display's boundaries. Windows on other displays are ignored.
+
+.TP
+.B Application Filtering
+Filter windows by executable basename for precise control over which applications to tile.
+
+.TP
+.B Aspect Ratio Control
+Maintain specific aspect ratios while tiling to preserve window proportions.
+
+.TP
+.B Flexible Margins
+Support for CSS-style margin specification with 1-4 values.
+
+.TP
+.B Circular Tiling
+Unique circular tiling mode that arranges windows around the display center with configurable radius, margins, and window sizes.
+
+.TP
+.B Smart Window Detection
+Automatically excludes minimized windows, system windows, and the tiler process itself.
+
+.SH REQUIREMENTS
+.TP
+.B Python 3.x
+Required for script execution.
+
+.TP
+.B X11 Environment
+Must be running in an X11 desktop session (Linux).
+
+.TP
+.B python3-xlib
+Python library for X11 interaction.
+
+.TP
+.B python3-psutil
+Python library for process detection and executable name resolution.
+
+.SH FILES
+.TP
+.I /usr/bin/tiler
+Main executable script.
+
+.TP
+.I /usr/share/bash-completion/completions/tiler
+Bash completion script for command-line tab completion.
+
+.TP
+.I /usr/share/applications/tiler.desktop
+Desktop entry file for application menus.
+
+.TP
+.I /usr/share/metainfo/io.github.tiler.metainfo.xml
+AppData file for software centers.
+
+.TP
+.I /usr/share/doc/tiler/
+Documentation directory containing README, specification, and requirements.
+
+.SH BASH COMPLETION
+tiler includes comprehensive bash completion support providing:
+.IP \(bu 2
+Tab completion for all command-line options
+.IP \(bu 2
+Application name suggestions for \fB\-a/\-\-for\-app\fR
+.IP \(bu 2
+Common value suggestions for aspect ratios, margins, and circular parameters
+.IP \(bu 2
+Context-aware completion based on current option
+
+After installation, bash completion is automatically available. For manual setup:
+.RS
+.B source /usr/share/bash-completion/completions/tiler
+.RE
+
+.SH TROUBLESHOOTING
+.TP
+.B "No windows found"
+Ensure you have visible, non-minimized windows open. The tool only processes windows that are currently viewable.
+
+.TP
+.B "Permission errors"
+Make sure you're running in an X11 session with proper display access. Check that DISPLAY environment variable is set correctly.
+
+.TP
+.B "Import errors"
+Install required dependencies:
+.B pip install python-xlib psutil
+
+.TP
+.B "Windows not tiling correctly"
+Check that windows are not maximized or in fullscreen mode, as these states may interfere with tiling operations.
+
+.SH AUTHOR
+Written by Lenik <tiler@bodz.net>.
+
+.SH COPYRIGHT
+Copyright \(co 2025 Lenik. License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+This is free software: you are free to change and redistribute it. There is NO WARRANTY, to the extent permitted by law.
+
+.SH SEE ALSO
+.BR wmctrl (1),
+.BR xprop (1),
+.BR xwininfo (1)
+
+Project homepage: <https://github.com/lenik/tiler>

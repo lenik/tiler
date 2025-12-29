@@ -10,11 +10,15 @@ SHAREDIR = $(PREFIX)/share
 APPDIR = $(SHAREDIR)/applications
 APPDATADIR = $(SHAREDIR)/metainfo
 DOCDIR = $(SHAREDIR)/doc/tiler
+MANDIR = $(SHAREDIR)/man/man1
+BASHCOMPDIR = $(SHAREDIR)/bash-completion/completions
 
 # Source files
 SCRIPT = tiler
 DESKTOP = tiler.desktop
 APPDATA = io.github.tiler.metainfo.xml
+MANPAGE = tiler.1
+BASHCOMP = tiler-completion.bash
 DOCS = README.md spec.md
 
 .PHONY: all install install-debug uninstall clean check
@@ -37,6 +41,8 @@ install:
 	install -d $(DESTDIR)$(APPDIR)
 	install -d $(DESTDIR)$(APPDATADIR)
 	install -d $(DESTDIR)$(DOCDIR)
+	install -d $(DESTDIR)$(MANDIR)
+	install -d $(DESTDIR)$(BASHCOMPDIR)
 	
 	# Install main script
 	install -m 755 $(SCRIPT) $(DESTDIR)$(BINDIR)/tiler
@@ -46,6 +52,12 @@ install:
 	
 	# Install appdata
 	install -m 644 $(APPDATA) $(DESTDIR)$(APPDATADIR)/
+	
+	# Install man page
+	install -m 644 $(MANPAGE) $(DESTDIR)$(MANDIR)/
+	
+	# Install bash completion
+	install -m 644 $(BASHCOMP) $(DESTDIR)$(BASHCOMPDIR)/tiler
 	
 	# Install documentation
 	install -m 644 $(DOCS) $(DESTDIR)$(DOCDIR)/
@@ -63,11 +75,15 @@ install-debug:
 	sudo mkdir -p /usr/share/applications
 	sudo mkdir -p /usr/share/metainfo
 	sudo mkdir -p /usr/share/doc/tiler
+	sudo mkdir -p /usr/share/man/man1
+	sudo mkdir -p /usr/share/bash-completion/completions
 	
 	# Create symlinks to source files
 	sudo ln -sf $(PWD)/$(SCRIPT) /usr/bin/tiler
 	sudo ln -sf $(PWD)/$(DESKTOP) /usr/share/applications/
 	sudo ln -sf $(PWD)/$(APPDATA) /usr/share/metainfo/
+	sudo ln -sf $(PWD)/$(MANPAGE) /usr/share/man/man1/
+	sudo ln -sf $(PWD)/$(BASHCOMP) /usr/share/bash-completion/completions/tiler
 	sudo ln -sf $(PWD)/README.md /usr/share/doc/tiler/
 	sudo ln -sf $(PWD)/spec.md /usr/share/doc/tiler/
 	sudo ln -sf $(PWD)/requirements.txt /usr/share/doc/tiler/
@@ -84,12 +100,16 @@ uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/tiler
 	rm -f $(DESTDIR)$(APPDIR)/$(DESKTOP)
 	rm -f $(DESTDIR)$(APPDATADIR)/$(APPDATA)
+	rm -f $(DESTDIR)$(MANDIR)/$(MANPAGE)
+	rm -f $(DESTDIR)$(BASHCOMPDIR)/tiler
 	rm -rf $(DESTDIR)$(DOCDIR)
 	
 	# Also remove debug symlinks if they exist
 	sudo rm -f /usr/bin/tiler
 	sudo rm -f /usr/share/applications/$(DESKTOP)
 	sudo rm -f /usr/share/metainfo/$(APPDATA)
+	sudo rm -f /usr/share/man/man1/$(MANPAGE)
+	sudo rm -f /usr/share/bash-completion/completions/tiler
 	sudo rm -rf /usr/share/doc/tiler
 	
 	@echo "Uninstall complete!"

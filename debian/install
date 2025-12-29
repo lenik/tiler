@@ -1,6 +1,8 @@
 tiler usr/bin/tiler
 tiler.desktop usr/share/applications/
 io.github.tiler.metainfo.xml usr/share/metainfo/
+tiler.1 usr/share/man/man1/
+tiler-completion.bash usr/share/bash-completion/completions/tiler
 README.md usr/share/doc/tiler/
 spec.md usr/share/doc/tiler/
 requirements.txt usr/share/doc/tiler/

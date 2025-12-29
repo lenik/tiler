@@ -34,6 +34,18 @@
    sudo ln -s /path/to/tiler/tiler /usr/local/bin/tiler
    ```
 
+4. **Optional: Enable bash completion**:
+   ```bash
+   # For current session
+   source tiler-completion.bash
+   
+   # For permanent installation (after system install)
+   # Bash completion is automatically available after 'make install'
+   
+   # For manual setup, copy to bash completion directory
+   sudo cp tiler-completion.bash /usr/share/bash-completion/completions/tiler
+   ```
+
 ## Usage
 
 ### Basic Commands
@@ -119,6 +131,21 @@
 - Python 3.x
 - X11 environment (Linux desktop)
 - `python-xlib` library
+- `psutil` library
+
+## Bash Completion
+
+Tiler includes comprehensive bash completion support that provides:
+
+- **Option completion**: Tab completion for all command-line options (`-a`, `--circular`, etc.)
+- **Application name completion**: Suggests running applications for `-a/--for-app`
+- **Value suggestions**: Common values for aspect ratios, margins, and circular parameters
+- **Context-aware completion**: Different completions based on the current option
+
+After installation, bash completion is automatically available. For manual setup, source the completion script:
+```bash
+source tiler-completion.bash
+```
 
 ## Troubleshooting
 
